@@ -22,7 +22,7 @@
   },
   "repository": {
     "type": "git",
-    "url": "https://github.com/abdallahnh/golocalise-javascript.git"
+    "url": "git+https://github.com/abdallahnh/golocalise-javascript.git"
   },
   "homepage": "https://golocalise.me",
   "keywords": [
