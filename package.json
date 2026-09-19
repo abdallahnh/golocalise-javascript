@@ -1,6 +1,6 @@
 {
   "name": "@golocalise/javascript-sdk",
-  "version": "0.0.0",
+  "version": "1.0.0",
   "description": "Official GoLocalise JavaScript SDK for OTA localization.",
   "type": "module",
   "main": "./dist/index.js",
@@ -36,5 +36,8 @@
     "@types/node": "^24.0.0",
     "typescript": "^5.9.0",
     "vitest": "4.1.11"
+  },
+  "publishConfig": {
+    "access": "public"
   }
 }
