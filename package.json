@@ -1,0 +1,40 @@
+{
+  "name": "@golocalise/javascript-sdk",
+  "version": "0.0.0",
+  "description": "Official GoLocalise JavaScript SDK for OTA localization.",
+  "type": "module",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    }
+  },
+  "files": [
+    "dist"
+  ],
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "test": "vitest run",
+    "prepack": "npm run build"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/abdallahnh/golocalise-javascript.git"
+  },
+  "homepage": "https://golocalise.me",
+  "keywords": [
+    "localization",
+    "i18n",
+    "translations",
+    "ota",
+    "golocalise"
+  ],
+  "devDependencies": {
+    "@types/node": "^24.0.0",
+    "typescript": "^5.9.0",
+    "vitest": "4.1.11"
+  }
+}
