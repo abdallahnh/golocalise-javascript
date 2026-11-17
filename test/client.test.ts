@@ -25,6 +25,25 @@ import {
 } from '../src/index.js';
 
 describe('canonical interpolation', () => {
+  it('formats typed number and decimal placeholders with the locale', () => {
+    expect(
+      formatCanonicalMessage('You have {0:number} items', [1234], 'en-US'),
+    ).toBe('You have 1,234 items');
+    expect(
+      formatCanonicalMessage('You have {0:number} items', ['1234'], 'en-US'),
+    ).toBe('You have 1,234 items');
+    expect(formatCanonicalMessage('Total {0:decimal:2}', [5], 'en-US')).toBe(
+      'Total 5.00',
+    );
+    expect(formatCanonicalMessage('{1:number} of {0}', ['x', 7], 'en-US')).toBe(
+      '7 of x',
+    );
+    expect(formatCanonicalMessage('{0:number}', ['abc'], 'en-US')).toBe('abc');
+    expect(formatCanonicalMessage('{0:number} {2}', [1, 2])).toBe(
+      '{0:number} {2}',
+    );
+  });
+
   it('formats positional values, escaped braces, Unicode, and fails safely', () => {
     expect(formatCanonicalMessage('{0} → {1}', ['مرحبا', 'World'])).toBe(
       'مرحبا → World',
@@ -557,5 +576,45 @@ describe('JavaScript reference SDK and OTA protocol v1', () => {
     expect(restarted.t(fixture.key, { namespace: fixture.namespace })).toBe(
       fixture.englishA,
     );
+  });
+});
+
+describe('typed placeholders', () => {
+  it('formats {0:number} and {0:decimal:N} with the locale', () => {
+    expect(
+      formatCanonicalMessage('You have {0:number} items', [1234], 'en-US'),
+    ).toBe('You have 1,234 items');
+    expect(
+      formatCanonicalMessage('Total {0:decimal:2}', ['1234.5'], 'en-US'),
+    ).toBe('Total 1,234.50');
+    expect(
+      formatCanonicalMessage('Total {0:decimal:2}', [1234.5], 'de-DE'),
+    ).toBe('Total 1.234,50');
+  });
+
+  it('inserts values that are not numbers unchanged', () => {
+    expect(formatCanonicalMessage('{0:number} items', ['many'], 'en-US')).toBe(
+      'many items',
+    );
+    expect(
+      formatCanonicalMessage('{0} and {1:number}', ['Maya', 3], 'en-US'),
+    ).toBe('Maya and 3');
+  });
+});
+
+describe('bundledFromExports', () => {
+  it('reads multi-language and single-language export files by namespace', async () => {
+    const { bundledFromExports } = await import('../src/index.js');
+    const bundled = bundledFromExports({
+      checkout: {
+        data: { 'en-US': { pay_now: 'Pay now' }, ar: { pay_now: 'ادفع الآن' } },
+      },
+      legal: { terms: 'Terms' },
+    });
+    expect(bundled.get('ar', 'checkout', 'pay_now')).toBe('ادفع الآن');
+    expect(bundled.get('en-US', 'checkout', 'pay_now')).toBe('Pay now');
+    expect(bundled.get('en-US', 'legal', 'terms')).toBe('Terms');
+    expect(bundled.get('en-US', 'checkout', 'missing')).toBeUndefined();
+    expect(bundled.get('en-US', 'unknown', 'pay_now')).toBeUndefined();
   });
 });

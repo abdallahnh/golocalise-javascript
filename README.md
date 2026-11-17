@@ -24,15 +24,12 @@ GoLocalise lets applications fetch versioned translations over the air (OTA), sw
 npm install @golocalise/javascript-sdk
 ```
 
-The npm package will become available when the first public release is published.
+The public package is published on npm as `@golocalise/javascript-sdk`.
 
 ## Quick Start
 
 ```ts
-import {
-  createClient,
-  MemoryCacheAdapter,
-} from '@golocalise/javascript-sdk';
+import { createClient, MemoryCacheAdapter } from '@golocalise/javascript-sdk';
 
 const client = createClient({
   baseUrl: 'https://api.golocalise.me',
@@ -45,11 +42,7 @@ const client = createClient({
 
 await client.initialize();
 
-const title = client.translation(
-  'welcome',
-  'common',
-  'Welcome',
-);
+const title = client.translation('welcome', 'common', 'Welcome');
 ```
 
 ## Switching Locale
@@ -57,11 +50,7 @@ const title = client.translation(
 ```ts
 await client.setLocale('ar');
 
-const title = client.translation(
-  'welcome',
-  'common',
-  'Welcome',
-);
+const title = client.translation('welcome', 'common', 'Welcome');
 ```
 
 ## OTA and Offline Behavior
@@ -71,6 +60,24 @@ GoLocalise validates OTA manifests and translation artifacts before replacing ca
 The SDK verifies project and environment scope, protocol version, artifact origin, artifact size, and SHA-256 checksum.
 
 If an update fails, the existing last-known-good translations remain available. Translation lookup itself does not perform network requests.
+
+## Build-only namespaces
+
+Namespaces set to **Build only** in GoLocalise are left out of OTA releases.
+Download them in your CI/CD pipeline, one `<namespace>.json` per namespace, from
+`GET /api/v1/projects/{projectId}/translations?environment=production&namespace=<name>&format=json`
+(an organization API credential with `translations:read` and `exports:read`),
+and bundle them with the app. Lookups fall back to these bundled strings.
+
+```ts
+import { bundledFromExports, createClient } from '@golocalise/javascript-sdk';
+import checkout from './golocalise/checkout.json';
+
+const client = createClient({
+  // …
+  bundled: bundledFromExports({ checkout }),
+});
+```
 
 ## Requirements
 

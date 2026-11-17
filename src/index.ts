@@ -5,7 +5,7 @@ import {
   type OtaManifest,
   type OtaMessage,
   type OtaPluralMessage,
-} from './protocol.js';
+} from './protocol.ts';
 
 export interface OtaHttpResponse {
   readonly status: number;
@@ -28,6 +28,46 @@ export interface PersistentCacheAdapter {
 
 export interface BundledTranslationAdapter {
   get(locale: string, namespace: string, key: string): OtaMessage | undefined;
+}
+
+/**
+ * One file written by the CI/CD export step for a build-only namespace:
+ * GET /api/v1/projects/{projectId}/translations?environment=…&namespace=…&format=json
+ * Projects with several languages return `{ data: { locale: { key: text } } }`;
+ * a project with one language returns a flat `{ key: text }` map.
+ */
+export type TranslationExportFile =
+  | {
+      readonly data: Readonly<Record<string, Readonly<Record<string, string>>>>;
+    }
+  | Readonly<Record<string, string>>;
+
+/**
+ * Bundled translations from CI/CD export files, keyed by namespace, e.g.
+ * `bundledFromExports({ checkout: checkoutJson, legal: legalJson })`.
+ * Build-only namespaces are not in OTA releases, so lookups fall through to
+ * these bundled strings.
+ */
+export function bundledFromExports(
+  exports: Readonly<Record<string, TranslationExportFile>>,
+): BundledTranslationAdapter {
+  return {
+    get(locale, namespace, key) {
+      const file = exports[namespace];
+      if (!file) return undefined;
+      if (
+        'data' in file &&
+        typeof file.data === 'object' &&
+        file.data !== null
+      ) {
+        return (file.data as Record<string, Record<string, string>>)[locale]?.[
+          key
+        ];
+      }
+      const flat = file as Readonly<Record<string, string>>;
+      return typeof flat[key] === 'string' ? flat[key] : undefined;
+    },
+  };
 }
 
 export interface GoLocaliseClientConfig {
@@ -180,7 +220,7 @@ export class GoLocaliseClient {
         ? value
         : selectPluralMessage(value, this.locale, options.count);
     return options.arguments
-      ? formatCanonicalMessage(resolved, options.arguments)
+      ? formatCanonicalMessage(resolved, options.arguments, this.locale)
       : resolved;
   }
 
@@ -471,7 +511,12 @@ function formatNamedArgument(
       if (token === '{{') return '\u0000';
       if (token === '}}') return '\u0001';
       if (name === variable) return String(value);
-      if (name !== undefined && /^\d+$/u.test(name)) return token;
+      if (
+        name !== undefined &&
+        /^\d+(?::(?:number|decimal:\d))?$/u.test(name)
+      ) {
+        return token;
+      }
       malformed = true;
       return token;
     },
@@ -481,13 +526,42 @@ function formatNamedArgument(
     : output.replaceAll('\u0000', '{').replaceAll('\u0001', '}');
 }
 
+// `{0}` inserts the argument as text. `{0:number}` formats it as an integer
+// and `{0:decimal:2}` as a fixed-decimal number, both with the client locale.
+const canonicalToken =
+  /\{\{|\}\}|\{(\d+)(?::(?:(number)|(decimal):(\d)))?\}|[{}]/gu;
+
+function formatArgument(
+  value: string | number,
+  kind: 'number' | 'decimal' | undefined,
+  digits: number,
+  locale: string | undefined,
+): string {
+  if (!kind) return String(value);
+  const text = String(value).trim();
+  const parsed =
+    typeof value === 'number' ? value : text === '' ? NaN : Number(text);
+  if (!Number.isFinite(parsed)) return String(value);
+  try {
+    return new Intl.NumberFormat(
+      locale,
+      kind === 'number'
+        ? { maximumFractionDigits: 0 }
+        : { minimumFractionDigits: digits, maximumFractionDigits: digits },
+    ).format(parsed);
+  } catch {
+    return String(parsed);
+  }
+}
+
 export function formatCanonicalMessage(
   message: string,
   arguments_: readonly (string | number)[],
+  locale?: string,
 ): string {
   const indexes = new Set<number>();
-  for (const match of message.matchAll(/\{(\d+)\}/gu)) {
-    indexes.add(Number(match[1]));
+  for (const match of message.matchAll(canonicalToken)) {
+    if (match[1] !== undefined) indexes.add(Number(match[1]));
   }
   const oneBased =
     !indexes.has(0) &&
@@ -496,8 +570,8 @@ export function formatCanonicalMessage(
     Math.max(...indexes) === arguments_.length;
   let malformed = false;
   const output = message.replace(
-    /\{\{|\}\}|\{(\d+)\}|[{}]/gu,
-    (token, rawIndex) => {
+    canonicalToken,
+    (token, rawIndex, numberKind, decimalKind, digits) => {
       if (token === '{{') return '\u0000';
       if (token === '}}') return '\u0001';
       if (rawIndex === undefined) {
@@ -507,9 +581,13 @@ export function formatCanonicalMessage(
       const index = Number(rawIndex);
       indexes.add(index);
       const argumentIndex = oneBased ? index - 1 : index;
-      return argumentIndex >= 0 && argumentIndex < arguments_.length
-        ? String(arguments_[argumentIndex])
-        : token;
+      if (argumentIndex < 0 || argumentIndex >= arguments_.length) return token;
+      return formatArgument(
+        arguments_[argumentIndex]!,
+        numberKind ? 'number' : decimalKind ? 'decimal' : undefined,
+        digits === undefined ? 0 : Number(digits),
+        locale,
+      );
     },
   );
   const expected = new Set(
